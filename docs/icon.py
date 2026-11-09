@@ -53,12 +53,22 @@ def main():
             y += 92
         y += 44
 
-    # the terminal side: a prompt and a few lines of output
-    d.polygon(k(600, 230, 650, 262, 600, 294), fill=BLUE)
-    for i, w in enumerate((250, 190, 270, 140)):
-        yy = 360 + i * 80
-        d.rounded_rectangle(k(600, yy, 600 + w, yy + 26), radius=13 * K, fill=FAINT)
-    d.rectangle(k(600, 700, 630, 750), fill=LINE)  # the cursor
+    # the terminal side: our own little ghost, a nod to Ghostty (not its logo)
+    ghost = (238, 240, 245)
+    gx, gy, gw, gh = 600, 250, 270, 330          # box of the body
+    d.pieslice(k(gx, gy, gx + gw, gy + gw), 180, 360, fill=ghost)        # the dome
+    d.rectangle(k(gx, gy + gw // 2 - 1, gx + gw, gy + gh), fill=ghost)  # the body
+    n = 3                                         # scalloped hem: touching circles leave the notches
+    sw = gw / n
+    for i in range(n):
+        x0 = gx + i * sw
+        d.ellipse(k(x0, gy + gh - sw / 2, x0 + sw, gy + gh + sw / 2), fill=ghost)
+    eye = (30, 31, 36)
+    for ex in (gx + 78, gx + 162):
+        d.ellipse(k(ex, gy + 112, ex + 34, gy + 166), fill=eye)
+    # a line of output under it
+    d.rounded_rectangle(k(600, 760, 840, 786), radius=13 * K, fill=FAINT)
+    d.rectangle(k(860, 750, 888, 796), fill=BLUE)  # the cursor
 
     img.resize((S, S), Image.LANCZOS).save(OUT)
     print(OUT)
