@@ -6,9 +6,9 @@ A sidebar for [Ghostty](https://ghostty.org) that lists every
 [Claude Code](https://claude.com/claude-code) session you have open, grouped by
 what each one is working on. Click a session to jump to its tab.
 
-<img src="docs/demo.gif" width="380" alt="The sidebar: sessions grouped under two plans. Clicking one that has waited 18 minutes focuses its tab; it starts working again, another finishes and waits, and a third moves into a plan's group when it starts editing that plan.">
+<img src="docs/demo-window.gif" width="100%" alt="The sidebar next to a Ghostty window with five tabs. Clicking the session that has waited 18 minutes brings its tab to the front, where Claude is asking a question; once answered it works again, and clicking another session switches to its tab.">
 
-<sub>Made-up sessions, drawn by the real code: <code>docs/demo.py</code>.</sub>
+<sub>Made-up sessions. The sidebar is drawn by the real code: <code>docs/demo_window.py</code>.</sub>
 
 With ten sessions in ten tabs, the tab bar tells you nothing. This tells you which
 sessions are working, which are waiting for you and for how long (orange after 15
@@ -100,6 +100,8 @@ Each session then goes under the plan it is working on, judged from what it does
 with its tools: among its last 60 mentions of a plan file, the one with the most
 weight. Editing a plan weighs 10, reading or naming it weighs 1. A session that
 moves on to another plan moves group.
+
+<img src="docs/demo.gif" width="380" alt="The sidebar alone: a session that starts editing a plan moves into that plan's group.">
 
 When that guess is wrong, for example a session that edited someone else's plan in
 passing, the session can say so itself: `/ghostty-sessions:plan checkout` (any part
