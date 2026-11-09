@@ -6,11 +6,14 @@ Read-only: it reads Ghostty's tabs (through JXA, by pid), Claude Code's
 ~/.claude*/sessions/<pid>.json and the saved conversations. The only thing it
 changes is which tab has focus, when you click.
 
-Usage: claude-sessions                print the list once
-       claude-sessions --sidebar      open the list in a narrow Ghostty window on the left
-       claude-sessions --watch N      interactive list, refreshed every N seconds (q quits)
-       claude-sessions --plan NAME    from inside a session: pin it to a plan; any part of
+Usage: ghostty-sessions                print the list once
+       ghostty-sessions --sidebar      open the list in a narrow Ghostty window on the left
+       ghostty-sessions --watch N      interactive list, refreshed every N seconds (q quits)
+       ghostty-sessions --plan NAME    from inside a session: pin it to a plan; any part of
                                       the name that matches only one plan works (`-` unpins)
+       ghostty-sessions --check        says whether everything it needs is in place
+       ghostty-sessions --auto-open    for a SessionStart hook: opens the sidebar if the config
+                                      says "auto_open": true, this is Ghostty, and none is open
 
 Grouping. With plans configured, each session goes under the plan it is working on,
 judged by what it does with its tools: among its last `window` mentions of a plan
@@ -19,15 +22,15 @@ reading or naming it weighs 1. What that gets wrong (a session that edited someo
 else's plan in passing) is fixed with --plan. Without plans, sessions are grouped by
 the git repository they started in.
 
-Config, all optional: ~/.config/claude-sessions/config.json (see README).
-Errors from --watch go to ~/Library/Logs/claude-sessions.log
+Config, all optional: ~/.config/ghostty-sessions/config.json (see README).
+Errors from --watch go to ~/Library/Logs/ghostty-sessions.log
 """
 import glob, hashlib, json, os, re, select, shlex, signal, subprocess, sys, termios, threading, time, tty
 
 HOME = os.path.expanduser("~")
-CONFIG_PATH = os.environ.get("CLAUDE_SESSIONS_CONFIG", HOME + "/.config/claude-sessions/config.json")
-ASSIGNED = HOME + "/Library/Caches/claude-sessions-plans.json"
-LOG = HOME + "/Library/Logs/claude-sessions.log"
+CONFIG_PATH = os.environ.get("GHOSTTY_SESSIONS_CONFIG", HOME + "/.config/ghostty-sessions/config.json")
+ASSIGNED = HOME + "/Library/Caches/ghostty-sessions-plans.json"
+LOG = HOME + "/Library/Logs/ghostty-sessions.log"
 
 DEFAULTS = {
     "claude_dirs": None,      # None: every ~/.claude* directory that has a sessions/ folder
@@ -36,6 +39,7 @@ DEFAULTS = {
     "window": 60,             # only recent mentions count: a long session that moves on, moves group
     "strip_prefixes": [],     # removed from worktree and repository names on screen, e.g. ["acme-"]
     "ghostty_app": "/Applications/Ghostty.app",
+    "auto_open": False,       # --auto-open opens the sidebar only when this is true
     "sidebar": {"width": 44, "font_size": 11},
 }
 
@@ -48,7 +52,7 @@ def load_config(path=CONFIG_PATH):
     except FileNotFoundError:
         user = {}
     except ValueError as e:
-        sys.exit(f"claude-sessions: {path} is not valid JSON: {e}")
+        sys.exit(f"ghostty-sessions: {path} is not valid JSON: {e}")
     for k, v in user.items():
         if k == "sidebar" and isinstance(v, dict):
             cfg["sidebar"].update(v)
@@ -65,7 +69,7 @@ def plan_source(p):
     """A plan folder and its file pattern, with the regex that finds its names in text."""
     pattern = p.get("pattern", "*.md")
     if pattern.count("*") != 1 or "/" in pattern:
-        sys.exit(f"claude-sessions: plan pattern {pattern!r} needs exactly one * and no /")
+        sys.exit(f"ghostty-sessions: plan pattern {pattern!r} needs exactly one * and no /")
     prefix, suffix = pattern.split("*")
     return {"dir": os.path.join(os.path.expanduser(p["dir"]), ""), "pattern": pattern,
             "prefix": prefix, "suffix": suffix,
@@ -253,7 +257,7 @@ def read_tool_uses(line, st):
             continue
         inp = c.get("input") or {}
         raw = json.dumps(inp, ensure_ascii=False)
-        if "claude-sessions --plan" in raw:  # pinning by hand is not working on the plan
+        if "ghostty-sessions --plan" in raw:  # pinning by hand is not working on the plan
             continue
         # Editing weighs only when the edited file is the plan; naming it inside another
         # file (a test, a script) is one more mention.
@@ -325,7 +329,7 @@ def resolve_plan(text):
     spaces, _ and -)."""
     plans = all_plans()
     if not CFG["plans"]:
-        sys.exit("claude-sessions --plan: no plans configured (see README)")
+        sys.exit("ghostty-sessions --plan: no plans configured (see README)")
     name = os.path.basename(text)
     exact = [p for p in plans if os.path.basename(p) == name]
     if len(exact) == 1:
@@ -336,15 +340,15 @@ def resolve_plan(text):
     if len(hits) == 1:
         return hits[0]
     if not hits:
-        sys.exit(f"claude-sessions --plan: no plan matches {text!r}")
-    sys.exit(f"claude-sessions --plan: {text!r} matches {len(hits)} plans: "
+        sys.exit(f"ghostty-sessions --plan: no plan matches {text!r}")
+    sys.exit(f"ghostty-sessions --plan: {text!r} matches {len(hits)} plans: "
              + ", ".join(os.path.basename(p) for p in hits[:8]))
 
 
 def assign_plan(text):
     meta = own_session()
     if not meta:
-        sys.exit("claude-sessions --plan: not running inside a Claude Code session")
+        sys.exit("ghostty-sessions --plan: not running inside a Claude Code session")
     pinned = load_json(ASSIGNED, {})
     if text in ("-", ""):
         pinned.pop(meta["sessionId"], None)
@@ -612,6 +616,59 @@ def interactive(every):
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
+def sidebar_running():
+    """Whether a sidebar (this script with --watch) is already running."""
+    me = os.path.basename(os.path.abspath(__file__))
+    for line in run(["ps", "-A", "-o", "pid=,args="]).splitlines():
+        pid, _, args = line.strip().partition(" ")
+        if pid.isdigit() and int(pid) != os.getpid() and re.search(r"(^|/)" + re.escape(me) + r"['\"]? --watch ", args + " "):
+            return True
+    return False
+
+
+def open_sidebar():
+    if sidebar_running():
+        print("ghostty-sessions: the sidebar is already open")
+        return
+    subprocess.run(sidebar_command(), check=True)
+
+
+def auto_open():
+    """For a SessionStart hook: never fails, never prints, never blocks the session."""
+    try:
+        if CFG.get("auto_open") and os.environ.get("TERM_PROGRAM", "").lower() == "ghostty" \
+                and os.path.isdir(CFG["ghostty_app"]) and not sidebar_running():
+            subprocess.run(sidebar_command(), timeout=10, capture_output=True)
+    except Exception:
+        pass
+
+
+def check():
+    """Everything the sidebar needs, one line each. Exit 1 if something is missing."""
+    import platform
+    ok = True
+
+    def line(good, text, fix=""):
+        nonlocal ok
+        ok = ok and good
+        print(("ok      " if good else "MISSING ") + text + ("" if good or not fix else f" ({fix})"))
+
+    line(platform.system() == "Darwin", "macOS", "Ghostty's AppleScript support is macOS only")
+    line(sys.version_info >= (3, 9), f"Python {platform.python_version()}", "needs 3.9 or later")
+    line(os.path.isdir(CFG["ghostty_app"]), f"Ghostty at {CFG['ghostty_app']}", 'set "ghostty_app" in the config')
+    term = os.environ.get("TERM_PROGRAM", "")
+    line(term.lower() == "ghostty", f"running inside Ghostty (TERM_PROGRAM={term or 'unset'})",
+         "only sessions running in Ghostty are listed")
+    line(bool(CFG["claude_dirs"]), "Claude Code folders: " + (", ".join(CFG["claude_dirs"]) or "none"))
+    exists = os.path.isfile(CONFIG_PATH)
+    print(f"config  {CONFIG_PATH}" + ("" if exists else " (not written yet)"))
+    for src in CFG["plans"]:
+        n = len(glob.glob(src["dir"] + src["pattern"]))
+        line(n > 0, f"plans: {n} files match {src['dir']}{src['pattern']}", "check dir and pattern")
+    print(f"auto_open: {bool(CFG.get('auto_open'))} · sidebar open: {sidebar_running()}")
+    return 0 if ok else 1
+
+
 def sidebar_command():
     """The `open` command for the sidebar. A separate Ghostty instance, because only a
     new instance takes a position and size; Ghostty always opens it on the main display."""
@@ -628,8 +685,13 @@ def sidebar_command():
 
 def main():
     global CFG
-    CFG = load_config()
     args = sys.argv[1:]
+    try:
+        CFG = load_config()
+    except SystemExit:
+        if args[:1] == ["--auto-open"]:  # a broken config must not show up at every session start
+            return
+        raise
     if args[:1] in (["-h"], ["--help"]):
         print(__doc__.strip())
     elif args[:1] == ["--watch"] and len(args) > 1:
@@ -637,15 +699,19 @@ def main():
         sys.stderr = open(LOG, "a", buffering=1)
         interactive(float(args[1]))
     elif args[:1] == ["--sidebar"]:
-        subprocess.run(sidebar_command(), check=True)
+        open_sidebar()
+    elif args[:1] == ["--auto-open"]:
+        auto_open()
+    elif args[:1] == ["--check"]:
+        sys.exit(check())
     elif args[:1] == ["--plan"] and len(args) > 1:
         assign_plan(args[1])
     elif args:
-        sys.exit(f"claude-sessions: unknown option {args[0]!r} (try --help)")
+        sys.exit(f"ghostty-sessions: unknown option {args[0]!r} (try --help)")
     else:
         gpid, rows = collect()
         if not gpid:
-            sys.exit("claude-sessions: no Claude Code session found running inside Ghostty")
+            sys.exit("ghostty-sessions: no Claude Code session found running inside Ghostty")
         width = os.get_terminal_size().columns if sys.stdout.isatty() else CFG["sidebar"]["width"]
         print("\n".join(render(rows, width)[0]))
 

@@ -1,0 +1,12 @@
+{
+  "name": "ghostty-sessions",
+  "owner": { "name": "gorkamb" },
+  "description": "The ghostty-sessions plugin for Claude Code",
+  "plugins": [
+    {
+      "name": "ghostty-sessions",
+      "source": "./",
+      "description": "A Ghostty sidebar listing your Claude Code sessions, grouped by what each one is working on"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"$TERM_PROGRAM\" = ghostty ] && python3 \"${CLAUDE_PLUGIN_ROOT}/ghostty-sessions\" --auto-open; exit 0",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -2,12 +2,13 @@
 import importlib.machinery, json, os, re, subprocess, sys, tempfile, types, unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPT = os.path.join(HERE, "..", "claude-sessions")
+SCRIPT = os.path.join(HERE, "..", "ghostty-sessions")
 
-loader = importlib.machinery.SourceFileLoader("claude_sessions", SCRIPT)
-s = types.ModuleType("claude_sessions")
+loader = importlib.machinery.SourceFileLoader("ghostty_sessions", SCRIPT)
+s = types.ModuleType("ghostty_sessions")
 s.__file__ = SCRIPT
 loader.exec_module(s)
+RUN, SIDEBAR_RUNNING = s.run, s.sidebar_running
 
 plain = lambda t: re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", t)
 use = lambda name, inp: json.dumps({"message": {"content": [{"type": "tool_use", "name": name, "input": inp}]}})
@@ -110,7 +111,7 @@ class ToolUses(Base):
         self.assertEqual(st["events"], [(self.A, E), (self.B, 1), (self.B, 1), (self.B, 1)])
 
     def test_pinning_is_not_a_mention(self):
-        st = self.read(use("Bash", {"command": "claude-sessions --plan PLAN_A.md"}))
+        st = self.read(use("Bash", {"command": "ghostty-sessions --plan PLAN_A.md"}))
         self.assertEqual(st["events"], [])
 
     def test_same_name_in_another_folder_is_not_the_plan(self):
@@ -251,7 +252,7 @@ class Render(Base):
 
 class Sidebar(Base):
     def test_command_quotes_paths_with_spaces(self):
-        s.__file__ = "/Users/me/My Tools/claude-sessions"
+        s.__file__ = "/Users/me/My Tools/ghostty-sessions"
         try:
             cmd = s.sidebar_command()
         finally:
@@ -261,7 +262,114 @@ class Sidebar(Base):
         self.assertTrue(last.startswith("--command="))
         import shlex
         parts = shlex.split(last[len("--command="):])
-        self.assertEqual(parts[1:], ["/Users/me/My Tools/claude-sessions", "--watch", "3"])
+        self.assertEqual(parts[1:], ["/Users/me/My Tools/ghostty-sessions", "--watch", "3"])
+
+
+class SidebarRunning(Base):
+    def ps(self, *lines):
+        s.run = lambda cmd, timeout=10: "\n".join(lines)
+
+    def tearDown(self):
+        s.run = RUN
+
+    def test_finds_a_running_sidebar(self):
+        self.ps("  12 /usr/bin/python3 /opt/x/ghostty-sessions --watch 3")
+        self.assertTrue(s.sidebar_running())
+        self.ps("  12 /bin/sh -c '/usr/bin/python3' '/My Tools/ghostty-sessions' --watch 3")
+        self.assertTrue(s.sidebar_running())
+
+    def test_ignores_other_processes(self):
+        self.ps("  12 /usr/bin/python3 /opt/x/ghostty-sessions --sidebar",
+                "  13 /usr/bin/python3 /opt/x/old-ghostty-sessions --watch 3",
+                f"  {os.getpid()} /usr/bin/python3 /opt/x/ghostty-sessions --watch 3",
+                "")
+        self.assertFalse(s.sidebar_running())
+
+
+class AutoOpen(Base):
+    def setUp(self):
+        super().setUp()
+        self.opened = []
+        self.env = os.environ.get("TERM_PROGRAM")
+        os.environ["TERM_PROGRAM"] = "ghostty"
+        s.sidebar_running = lambda: False
+        s.subprocess = types.SimpleNamespace(run=lambda cmd, **k: self.opened.append(cmd))
+        s.CFG = config(self.tmp, auto_open=True, ghostty_app=self.tmp)
+
+    def tearDown(self):
+        s.sidebar_running = SIDEBAR_RUNNING
+        s.subprocess = subprocess
+        if self.env is None:
+            os.environ.pop("TERM_PROGRAM", None)
+        else:
+            os.environ["TERM_PROGRAM"] = self.env
+
+    def test_opens_when_everything_says_so(self):
+        s.auto_open()
+        self.assertEqual(len(self.opened), 1)
+
+    def test_off_by_default(self):
+        s.CFG = config(self.tmp, ghostty_app=self.tmp)
+        s.auto_open()
+        self.assertEqual(self.opened, [])
+
+    def test_not_outside_ghostty(self):
+        os.environ["TERM_PROGRAM"] = "iTerm.app"
+        s.auto_open()
+        self.assertEqual(self.opened, [])
+
+    def test_not_twice(self):
+        s.sidebar_running = lambda: True
+        s.auto_open()
+        self.assertEqual(self.opened, [])
+
+    def test_never_raises(self):
+        def boom():
+            raise RuntimeError("ps died")
+        s.sidebar_running = boom
+        s.auto_open()
+
+    def test_broken_config_is_silent(self):
+        bad = os.path.join(self.tmp, "bad.json")
+        open(bad, "w").write("{")
+        env = dict(os.environ, GHOSTTY_SESSIONS_CONFIG=bad)
+        out = subprocess.run([sys.executable, SCRIPT, "--auto-open"], capture_output=True, text=True, env=env)
+        self.assertEqual((out.returncode, out.stdout, out.stderr), (0, "", ""))
+
+
+class Check(Base):
+    def run_check(self, **cfg):
+        import contextlib, io, platform
+        s.CFG = config(self.tmp, **cfg)
+        s.sidebar_running = lambda: False
+        env = os.environ.get("TERM_PROGRAM")
+        os.environ["TERM_PROGRAM"] = "ghostty"
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                rc = s.check()
+        finally:
+            s.sidebar_running = SIDEBAR_RUNNING
+            if env is None:
+                os.environ.pop("TERM_PROGRAM", None)
+            else:
+                os.environ["TERM_PROGRAM"] = env
+        return rc, out.getvalue(), platform.system() == "Darwin"
+
+    def test_all_in_place(self):
+        rc, out, mac = self.run_check(ghostty_app=self.tmp, plans=[{"dir": self.plans, "pattern": "PLAN_*.md"}])
+        self.assertIn("plans: 4 files match", out)
+        self.assertEqual(rc, 0 if mac else 1, out)
+
+    def test_a_pattern_that_matches_nothing(self):
+        rc, out, _ = self.run_check(ghostty_app=self.tmp, plans=[{"dir": self.plans, "pattern": "SPEC_*.md"}])
+        self.assertIn("MISSING plans: 0 files match", out)
+        self.assertEqual(rc, 1)
+
+    def test_missing_ghostty(self):
+        rc, out, _ = self.run_check(ghostty_app=self.tmp + "/nope.app")
+        self.assertIn("MISSING Ghostty at", out)
+        self.assertEqual(rc, 1)
 
 
 class Cli(unittest.TestCase):

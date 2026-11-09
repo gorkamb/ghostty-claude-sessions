@@ -1,0 +1,10 @@
+{
+  "name": "ghostty-sessions",
+  "version": "1.0.0",
+  "description": "A Ghostty sidebar listing your Claude Code sessions, grouped by what each one is working on. Click to jump to the tab.",
+  "author": { "name": "gorkamb", "url": "https://github.com/gorkamb" },
+  "homepage": "https://github.com/gorkamb/ghostty-claude-sessions",
+  "repository": "https://github.com/gorkamb/ghostty-claude-sessions",
+  "keywords": ["ghostty", "sidebar", "sessions", "tabs", "worktrees", "plans"],
+  "license": "MIT"
+}

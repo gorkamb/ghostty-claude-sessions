@@ -9,10 +9,10 @@ import copy, importlib.machinery, os, re, sys, time, types
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPT = os.path.join(HERE, "..", "claude-sessions")
-m = types.ModuleType("claude_sessions")
+SCRIPT = os.path.join(HERE, "..", "ghostty-sessions")
+m = types.ModuleType("ghostty_sessions")
 m.__file__ = SCRIPT
-importlib.machinery.SourceFileLoader("claude_sessions", SCRIPT).exec_module(m)
+importlib.machinery.SourceFileLoader("ghostty_sessions", SCRIPT).exec_module(m)
 m.CFG = m.load_config("/nonexistent")
 
 COLS, ROWS = 44, 25
