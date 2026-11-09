@@ -4,30 +4,9 @@ A sidebar for [Ghostty](https://ghostty.org) that lists every
 [Claude Code](https://claude.com/claude-code) session you have open, grouped by
 what each one is working on. Click a session to jump to its tab.
 
-```
- ◆ Sessions                           10:42
- 5 · ● 3 working · ○ 2 waiting
+<img src="docs/demo.gif" width="380" alt="The sidebar: sessions grouped under two plans. Clicking one that has waited 18 minutes focuses its tab; it starts working again, another finishes and waits, and a third moves into a plan's group when it starts editing that plan.">
 
-▌ Checkout Redesign 2
-  ●  1 Payment form validation            4m
-       shop-web-payment-form
-
-  ○  4 Order summary API                 18m
-       api-order-summary · shop-api#212
-
-▌ Search Speed 2
-  ◆  2 Profile slow queries               1m
-       running a command
-
-  ●  3 Add the trigram index              7m
-       shop-api-trigram
-
-▌ other 1
-  ○  5 Release notes                     45m
-       waiting
-
- click: go to session · q: quit
-```
+<sub>Made-up sessions, drawn by the real code: <code>docs/demo.py</code>.</sub>
 
 With ten sessions in ten tabs, the tab bar tells you nothing. This tells you which
 sessions are working, which are waiting for you and for how long (orange after 15
