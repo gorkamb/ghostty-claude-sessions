@@ -1,6 +1,18 @@
-<img src=".claude-plugin/icon.png" width="112" alt="">
+<div align="center">
+
+<img src=".claude-plugin/icon.png" width="128" alt="">
 
 # ghostty-sessions
+
+**See which of your Claude Code sessions are working, and which are waiting for you.**
+
+[![test](https://github.com/gorkamb/ghostty-claude-sessions/actions/workflows/test.yml/badge.svg)](https://github.com/gorkamb/ghostty-claude-sessions/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![macOS](https://img.shields.io/badge/macOS-Ghostty-555?logo=apple&logoColor=white)
+![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757)](#get-started)
+
+</div>
 
 A sidebar for [Ghostty](https://ghostty.org) that lists every
 [Claude Code](https://claude.com/claude-code) session you have open, grouped by
