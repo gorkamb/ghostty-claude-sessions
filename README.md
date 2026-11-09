@@ -14,20 +14,17 @@
 
 </div>
 
-A sidebar for [Ghostty](https://ghostty.org) that lists every
-[Claude Code](https://claude.com/claude-code) session you have open, grouped by
-what each one is working on. Click a session to jump to its tab.
-
 <img src="docs/demo-window.gif" width="100%" alt="The sidebar next to a Ghostty window with five tabs. Clicking the session that has waited 18 minutes brings its tab to the front, where Claude is asking a question; once answered it works again, and clicking another session switches to its tab.">
 
 <sub>Made-up sessions. The sidebar is drawn by the real code: <code>docs/demo_window.py</code>.</sub>
 
-With ten sessions in ten tabs, the tab bar tells you nothing. This tells you which
-sessions are working, which are waiting for you and for how long (orange after 15
-minutes), which worktree and pull request each one is on, and which ones belong to
-the same piece of work.
+With ten sessions in ten tabs, the tab bar tells you nothing. This sidebar lists them
+all, grouped by what each one is working on, with how long each has waited for you.
+Click one to jump to its tab.
 
-macOS and Ghostty only. One Python file, no dependencies.
+**You need** macOS, [Ghostty](https://ghostty.org) and
+[Claude Code](https://claude.com/claude-code). It is one Python file with no
+dependencies; it uses the Python 3 that comes with Apple's Command Line Tools.
 
 ## Get started
 
@@ -48,7 +45,7 @@ Then `/reload-plugins`.
 
 Claude checks that everything is in place, looks for where you keep plan files,
 writes the config and opens the sidebar. From then on the sidebar opens by itself
-when a session starts in Ghostty, if it is not open already.
+when a session starts in Ghostty.
 
 The first time, macOS asks whether your terminal may control Ghostty. Say yes:
 that is how it reads the tabs and switches between them.
@@ -57,7 +54,10 @@ that is how it reads the tabs and switches between them.
 | --- | --- |
 | `/ghostty-sessions:setup` | checks, finds your plans, writes the config, opens the sidebar |
 | `/ghostty-sessions:open` | opens the sidebar, if it is not open |
-| `/ghostty-sessions:plan NAME` | pins this session to a plan (see Grouping); `-` unpins |
+| `/ghostty-sessions:plan NAME` | puts this session under a plan (see Grouping); `-` undoes it |
+
+**To remove it:** `/plugin uninstall ghostty-sessions`, and delete
+`~/.config/ghostty-sessions/` if you want the config gone too.
 
 <details>
 <summary>Without the plugin</summary>
@@ -70,23 +70,17 @@ ghostty-sessions --sidebar
 ```
 
 Any folder on your `PATH` works instead of `/usr/local/bin`. Write the config by
-hand (see Configuration).
-
-</details>
-
-## Use
-
-From a shell, with or without the plugin:
+hand (see Configuration). The other commands:
 
 | Command | What it does |
 | --- | --- |
-| `ghostty-sessions --sidebar` | opens the list in a narrow Ghostty window on the left |
 | `ghostty-sessions` | prints the list once |
-| `ghostty-sessions --watch 3` | the interactive list in the current terminal, refreshed every 3 s |
-| `ghostty-sessions --plan NAME` | from inside a session: pins it to a plan (see below); `-` unpins |
-| `ghostty-sessions --check` | says whether everything it needs is in place |
+| `ghostty-sessions --watch 3` | the list in the current terminal, refreshed every 3 s |
+| `ghostty-sessions --plan NAME` | from inside a session: puts it under a plan; `-` undoes it |
 
-In the list: click a session to go to its tab, `q` to quit.
+</details>
+
+## Reading the list
 
 | Mark | Meaning |
 | --- | --- |
@@ -95,39 +89,32 @@ In the list: click a session to go to its tab, `q` to quit.
 | `○` | waiting for you; the time turns orange after 15 minutes |
 | `·` | a tab with no Claude Code session |
 
+Under each session: its worktree and pull request, if it has them. Click a session
+to go to its tab, `q` to quit.
+
 ## Grouping
 
-**By repository**, out of the box: each session goes under the git repository it
-was started in, and a worktree goes with its repository.
+**By repository**, out of the box.
 
-**By plan**, if you keep plans or specs as files. Tell it where they are:
-
-```json
-{
-  "plans": [{"dir": "~/work/notes", "pattern": "PLAN_*.md"}]
-}
-```
-
-Each session then goes under the plan it is working on, judged from what it does
-with its tools: among its last 60 mentions of a plan file, the one with the most
-weight. Editing a plan weighs 10, reading or naming it weighs 1. A session that
-moves on to another plan moves group.
+**By plan**, if you keep plans or specs as files: the setup finds them.
+Each session then goes under the plan it is editing, and moves when it moves on to
+another one.
 
 <img src="docs/demo.gif" width="380" alt="The sidebar alone: a session that starts editing a plan moves into that plan's group.">
 
-When that guess is wrong, for example a session that edited someone else's plan in
-passing, the session can say so itself: `/ghostty-sessions:plan checkout` (any part
-of the file name that matches only one plan works).
+If it gets one wrong, for example a session that edited someone else's plan in
+passing, tell the session: `/ghostty-sessions:plan checkout` (any part of the file
+name that matches only one plan works).
 
 ## Configuration
 
 All optional, in `~/.config/ghostty-sessions/config.json` (or the file named by
-`GHOSTTY_SESSIONS_CONFIG`):
+`GHOSTTY_SESSIONS_CONFIG`). The setup writes it for you.
 
 | Key | Default | |
 | --- | --- | --- |
-| `plans` | `[]` | folders of plan files and their pattern, with one `*` |
-| `edit_weight` | `10` | how much editing a plan weighs against reading it |
+| `plans` | `[]` | where plan files live, e.g. `[{"dir": "~/work/notes", "pattern": "PLAN_*.md"}]` (one `*`) |
+| `edit_weight` | `10` | editing a plan counts this many times more than reading it |
 | `window` | `60` | how many recent plan mentions count |
 | `strip_prefixes` | `[]` | prefixes removed from worktree and repository names, e.g. `["acme-"]` |
 | `claude_dirs` | every `~/.claude*` with sessions | Claude Code config folders to read |
@@ -139,30 +126,25 @@ All optional, in `~/.config/ghostty-sessions/config.json` (or the file named by
 
 Everything stays on your machine. It sends nothing anywhere.
 
-- Ghostty's windows and tabs, through Ghostty's AppleScript support (JXA).
+- Ghostty's windows and tabs, through Ghostty's AppleScript support.
 - `~/.claude/sessions/<pid>.json`, where Claude Code keeps each running session's
   status.
 - The saved conversations in `~/.claude/projects/`, and only the tool calls in
   them (which files a session read or edited, which commands it ran), to find
   its plan, worktree and pull request. It never shows their content.
 
-The only thing it changes is which tab has focus, when you click. The plugin adds a
-hook that runs `--auto-open` when a session starts: it opens the sidebar only if
-`auto_open` is on, the session runs in Ghostty and no sidebar is open, and it never
-blocks or fails the session.
+The only thing it changes is which tab has focus, when you click. The plugin's
+start-up hook only opens the sidebar, and never blocks or fails the session.
 
 ## Limits
 
-- Ghostty on macOS only: it needs Ghostty's AppleScript support. Tested with
-  Ghostty 1.4.0 and Claude Code 2.1.319.
 - `sessions/<pid>.json` is an internal Claude Code file, not a documented API. A
-  Claude Code update can change it and break the status column.
-- The sidebar opens on the main display, at the left edge. Ghostty does not take a
-  negative position, and moving it afterwards would need the Accessibility
-  permission, which this tool does not ask for.
-- The first click on the sidebar after using another window only activates it,
-  unless the pointer moved over it first.
-- A worktree or pull request is the last one the session touched or opened, which
+  Claude Code update can break the status column. Tested with Ghostty 1.4.0 and
+  Claude Code 2.1.319.
+- The sidebar always opens at the left edge of the main display.
+- After using another window, the first click on the sidebar only brings it to the
+  front, unless the pointer moved over it first.
+- The worktree and pull request shown are the last ones the session touched, which
   is usually, but not always, the one it is working on.
 
 ## Development
