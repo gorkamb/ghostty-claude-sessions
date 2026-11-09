@@ -1,3 +1,5 @@
+<img src=".claude-plugin/icon.png" width="112" alt="">
+
 # ghostty-sessions
 
 A sidebar for [Ghostty](https://ghostty.org) that lists every
